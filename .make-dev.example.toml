@@ -1,0 +1,16 @@
+[github]
+ready_label = "Ready？"
+review_label = "確認待ち"
+failed_label = "GPT確認待ち"
+branch_prefix = "make-dev/issue-"
+
+[codex]
+instructions = """
+既存の設計と規約を守り、Issueにない大規模な変更を行わないこと。
+"""
+
+[checks]
+commands = [
+  "python -m pytest -q",
+]
+
