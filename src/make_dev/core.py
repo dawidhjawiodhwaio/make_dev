@@ -331,7 +331,12 @@ def execute(repo: Path, *, dry_run: bool = False) -> str | None:
             pr_url = runner.gh("pr", "create", "--base", default_branch, "--head", branch, "--title", f"#{number} {issue['title']}", "--body-file", body_path, cwd=worktree)
         finally:
             Path(body_path).unlink(missing_ok=True)
-        runner.gh("issue", "edit", str(number), "--remove-label", config.ready_label, "--add-label", config.review_label)
+        runner.gh(
+            "issue", "edit", str(number),
+            "--remove-label", config.ready_label,
+            "--remove-label", config.failed_label,
+            "--add-label", config.review_label,
+        )
         print(f"完了: {pr_url}")
         return pr_url
     except (MakeDevError, json.JSONDecodeError) as exc:
