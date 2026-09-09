@@ -17,6 +17,25 @@ class MakeDevError(RuntimeError):
     pass
 
 
+DEFAULT_CONFIG = '''[github]
+ready_label = "Ready？"
+review_label = "確認待ち"
+failed_label = "GPT確認待ち"
+branch_prefix = "make-dev/issue-"
+
+[codex]
+instructions = """
+既存の設計と規約を守ること。
+Issueと無関係な変更を行わないこと。
+"""
+
+[checks]
+commands = []
+'''
+
+MAKE_DEV_COMMAND = 'make-dev run --repo "$(CURDIR)"'
+
+
 @dataclass(frozen=True)
 class Config:
     ready_label: str = "Ready？"
@@ -25,6 +44,91 @@ class Config:
     branch_prefix: str = "make-dev/issue-"
     test_commands: tuple[str, ...] = ()
     instructions: str = ""
+
+
+def _make_target_recipes(content: str, name: str) -> list[tuple[str, ...]]:
+    """Return recipes for definitions of a simple Make target."""
+    lines = content.splitlines()
+    recipes: list[tuple[str, ...]] = []
+    for index, line in enumerate(lines):
+        if line[:1].isspace() or line.lstrip().startswith("#") or ":" not in line:
+            continue
+        targets, rest = line.split(":", 1)
+        # Do not mistake assignments such as ``dev := value`` for targets.
+        if targets.rstrip().endswith(("+", "?", ":", "!")) or name not in targets.split():
+            continue
+        recipe: list[str] = []
+        if ";" in rest:
+            recipe.append(rest.split(";", 1)[1].strip())
+        for following in lines[index + 1:]:
+            if following.startswith("\t"):
+                recipe.append(following[1:].strip())
+            elif not following.strip() or following.lstrip().startswith("#"):
+                continue
+            else:
+                break
+        recipes.append(tuple(item for item in recipe if item))
+    return recipes
+
+
+def initialize_project(repo: Path) -> tuple[Path, ...]:
+    """Add make-dev's config and Make targets to an existing Git repository."""
+    repo = repo.resolve()
+    if not repo.is_dir():
+        raise MakeDevError(f"対象ディレクトリがありません: {repo}")
+    check = subprocess.run(
+        ("git", "-C", str(repo), "rev-parse", "--show-toplevel"),
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if check.returncode:
+        raise MakeDevError(f"Gitリポジトリではありません: {repo}")
+
+    makefile = repo / "Makefile"
+    try:
+        content = makefile.read_text(encoding="utf-8") if makefile.exists() else ""
+    except OSError as exc:
+        raise MakeDevError(f"Makefileを読めません: {exc}") from exc
+
+    missing: list[str] = []
+    for target in ("dev", "dev-next"):
+        recipes = _make_target_recipes(content, target)
+        if not recipes:
+            missing.append(target)
+            continue
+        expected = (MAKE_DEV_COMMAND,)
+        normalized = [tuple(command.removeprefix("@").strip() for command in recipe) for recipe in recipes]
+        if len(normalized) != 1 or normalized[0] != expected:
+            raise MakeDevError(
+                f"Makefileの既存ターゲット '{target}' は別内容のため上書きできません"
+            )
+
+    changed: list[Path] = []
+    config_path = repo / ".make-dev.toml"
+    if not config_path.exists():
+        try:
+            config_path.write_text(DEFAULT_CONFIG, encoding="utf-8")
+        except OSError as exc:
+            raise MakeDevError(f"設定ファイルを書けません: {exc}") from exc
+        changed.append(config_path)
+
+    if missing:
+        addition = ""
+        if content and not content.endswith("\n"):
+            addition += "\n"
+        if content:
+            addition += "\n"
+        addition += f".PHONY: {' '.join(missing)}\n"
+        for target in missing:
+            addition += f"{target}:\n\t@{MAKE_DEV_COMMAND}\n"
+        try:
+            makefile.write_text(content + addition, encoding="utf-8")
+        except OSError as exc:
+            # Avoid leaving a newly-created config after a failed Makefile write.
+            if config_path in changed:
+                config_path.unlink(missing_ok=True)
+            raise MakeDevError(f"Makefileを書けません: {exc}") from exc
+        changed.append(makefile)
+    return tuple(changed)
 
 
 def load_config(repo: Path) -> Config:

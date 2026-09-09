@@ -32,7 +32,17 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-対象プロジェクトのルートへ `.make-dev.toml` を作ります。
+## 新規プロジェクトへの導入
+
+対象のGitリポジトリへ設定ファイルと `make dev` / `make dev-next` ターゲットを追加します。
+
+```bash
+make-dev init --repo /path/to/project
+```
+
+既存のMakefileがあれば内容を保持して末尾へターゲットを追加します。再実行しても重複しません。同名ターゲットが別内容で存在する場合は、安全のため上書きせずエラーになります。実行後は作成・変更したファイルが表示されます。
+
+生成された `.make-dev.toml` のチェックコマンドやCodex向け指示は、プロジェクトに合わせて編集してください。
 
 ```toml
 [github]
@@ -62,6 +72,8 @@ commands = [
 ```bash
 make-dev check --repo /path/to/project
 make-dev run --repo /path/to/project
+make dev
+make dev-next
 ```
 
 対象リポジトリがdirtyな場合は、既存作業を守るため何も変更せず終了します。実装は `.make-dev/worktrees/issue-N` の分離worktreeで行い、終了時にworktreeだけを片付けます。branchとcommitは残ります。
@@ -77,11 +89,7 @@ make-dev run --repo /path/to/project
 
 各リポジトリの `scripts/dev-next.sh` に埋め込まれていたテストコマンドとCodex向け指示を `.make-dev.toml` へ移します。Makefileから使いたい場合は次の薄い入口だけを置きます。
 
-```make
-.PHONY: dev
-dev:
-	@make-dev run --repo "$(CURDIR)"
-```
+この設定は `make-dev init --repo /path/to/project` で自動追加できます。
 
 ## 初期版の対象外
 
