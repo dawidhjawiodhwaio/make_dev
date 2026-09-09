@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .core import MakeDevError, execute, load_config
+from .core import MakeDevError, execute, initialize_project, load_config
 
 
 def parser() -> argparse.ArgumentParser:
@@ -15,6 +15,8 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--dry-run", action="store_true", help="設定と実行予定を確認します")
     check = sub.add_parser("check", help="対象リポジトリの設定を検証します")
     check.add_argument("--repo", type=Path, default=Path.cwd())
+    init = sub.add_parser("init", help="対象Gitリポジトリへmake devを設定します")
+    init.add_argument("--repo", type=Path, default=Path.cwd(), help="対象Gitリポジトリ")
     return result
 
 
@@ -24,7 +26,15 @@ def main(argv: list[str] | None = None) -> int:
         parser().print_help()
         return 0
     try:
-        if args.command == "check":
+        if args.command == "init":
+            repo = args.repo.resolve()
+            changed = initialize_project(repo)
+            if changed:
+                for path in changed:
+                    print(f"作成・変更: {path.relative_to(repo)}")
+            else:
+                print("設定済み: 変更はありません")
+        elif args.command == "check":
             config = load_config(args.repo.resolve())
             print(f"設定OK: checks={len(config.test_commands)}")
         elif args.dry_run:
