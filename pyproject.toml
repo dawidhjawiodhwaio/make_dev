@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "make-dev"
+version = "0.1.0"
+description = "Turn ready GitHub issues into tested pull requests with Codex"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+readme = "README.md"
+
+[project.scripts]
+make-dev = "make_dev.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
